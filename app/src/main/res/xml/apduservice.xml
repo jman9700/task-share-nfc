@@ -1,0 +1,9 @@
+<host-apdu-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/app_name"
+    android:requireDeviceUnlock="true">
+    <!-- Custom AID used to scope the ISO-DEP session to this app's handshake protocol.
+         See nfc/NfcHandshakeHostService.kt for the request/response format. -->
+    <aid-group android:category="other" android:description="@string/app_name">
+        <aid-filter android:name="F05461736B53686172" />
+    </aid-group>
+</host-apdu-service>
