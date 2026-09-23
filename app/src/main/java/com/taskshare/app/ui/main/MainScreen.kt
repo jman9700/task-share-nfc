@@ -1,33 +1,63 @@
 package com.taskshare.app.ui.main
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bathtub
+import androidx.compose.material.icons.filled.Bed
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Chair
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Kitchen
 import androidx.compose.material.icons.filled.Nfc
+import androidx.compose.material.icons.filled.Weekend
+import androidx.compose.material.icons.filled.Yard
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.taskshare.app.data.model.Task
 import com.taskshare.app.data.repository.TaskRepository
+import com.taskshare.app.ui.theme.StatusBadge
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +74,11 @@ fun MainScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Task Share") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
                 actions = {
                     IconButton(onClick = onShareUpdate) {
                         Icon(Icons.Filled.Nfc, contentDescription = "Share update via NFC")
@@ -55,23 +90,32 @@ fun MainScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddTask) {
+            FloatingActionButton(
+                onClick = onAddTask,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ) {
                 Icon(Icons.Filled.Add, contentDescription = "Add task")
             }
         },
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
             SortModeRow(current = state.sortMode, onSelect = viewModel::setSortMode)
-            LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                state.groups.forEach { group ->
-                    item { GroupHeader(group.label) }
-                    items(group.tasks, key = { it.task.id }) { meta ->
-                        TaskRow(
-                            task = meta.task,
-                            urgency = meta.urgency,
-                            ownerNames = meta.ownerNames,
-                            onMarkDone = { state.localUserId?.let { viewModel.markDone(meta.task.id, it) } },
-                        )
+            if (state.groups.all { it.tasks.isEmpty() }) {
+                EmptyState()
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    state.groups.forEach { group ->
+                        if (group.tasks.isEmpty()) return@forEach
+                        item { GroupHeader(group.label) }
+                        items(group.tasks, key = { it.task.id }) { meta ->
+                            TaskRow(
+                                task = meta.task,
+                                urgency = meta.urgency,
+                                ownerNames = meta.ownerNames,
+                                onMarkDone = { state.localUserId?.let { viewModel.markDone(meta.task.id, it) } },
+                            )
+                        }
                     }
                 }
             }
@@ -81,21 +125,25 @@ fun MainScreen(
 
 @Composable
 private fun SortModeRow(current: SortMode, onSelect: (SortMode) -> Unit) {
-    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Text("Sort by", style = MaterialTheme.typography.labelMedium)
-        androidx.compose.foundation.layout.Row(modifier = Modifier.padding(top = 4.dp)) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Text("Sort by", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .horizontalScroll(rememberScrollState()),
+        ) {
             FilterChip(
                 selected = current == SortMode.URGENCY,
                 onClick = { onSelect(SortMode.URGENCY) },
                 label = { Text("Most overdue") },
             )
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             FilterChip(
                 selected = current == SortMode.ROOM,
                 onClick = { onSelect(SortMode.ROOM) },
                 label = { Text("Room") },
             )
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             FilterChip(
                 selected = current == SortMode.OWNER,
                 onClick = { onSelect(SortMode.OWNER) },
@@ -110,8 +158,39 @@ private fun GroupHeader(label: String) {
     Text(
         text = label,
         style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
     )
+}
+
+@Composable
+private fun EmptyState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            Icons.Outlined.Inbox,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "No tasks yet",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(top = 12.dp),
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "Tap the + button to add your first recurring chore.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 @Composable
@@ -119,23 +198,103 @@ private fun TaskRow(task: Task, urgency: Double, ownerNames: List<String>, onMar
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        colors = CardDefaults.cardColors(),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(task.name, style = MaterialTheme.typography.titleMedium)
-            Text("${task.location} · ${task.frequency.label()}", style = MaterialTheme.typography.bodySmall)
-            if (ownerNames.isNotEmpty()) {
-                Text(ownerNames.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RoomIcon(task.location)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(task.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "${task.location} · ${task.frequency.label()}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (ownerNames.isNotEmpty()) {
+                    Text(
+                        ownerNames.joinToString(", "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                UrgencyIndicator(urgency)
             }
-            Text(
-                text = if (urgency >= 1.0) "Overdue" else "Due in ${(1 - urgency).let { "%.0f%%".format(it * 100) }} of cycle",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (urgency >= 1.0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            androidx.compose.material3.TextButton(onClick = onMarkDone) {
-                Text("Mark done")
+            Spacer(modifier = Modifier.width(8.dp))
+            FilledIconButton(
+                onClick = onMarkDone,
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
+            ) {
+                Icon(Icons.Filled.Check, contentDescription = "Mark ${task.name} done")
             }
         }
+    }
+}
+
+@Composable
+private fun RoomIcon(location: String) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.secondaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            iconForLocation(location),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+    }
+}
+
+@Composable
+private fun UrgencyIndicator(urgency: Double) {
+    val progress = urgency.toFloat().coerceIn(0f, 1f)
+    val overdue = urgency >= 1.0
+    val color = when {
+        overdue -> MaterialTheme.colorScheme.error
+        urgency >= 0.75 -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.secondary
+    }
+    Column {
+        LinearProgressIndicator(
+            progress = progress,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp)),
+            color = color,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        )
+        Text(
+            text = if (overdue) "OVERDUE" else "${(100 - progress * 100).let { "%.0f".format(it) }}% OF CYCLE LEFT",
+            style = StatusBadge,
+            color = color,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+private fun iconForLocation(location: String): ImageVector {
+    val normalized = location.lowercase()
+    return when {
+        "kitchen" in normalized -> Icons.Filled.Kitchen
+        "bath" in normalized -> Icons.Filled.Bathtub
+        "bed" in normalized -> Icons.Filled.Bed
+        "living" in normalized || "lounge" in normalized -> Icons.Filled.Weekend
+        "garage" in normalized || "car" in normalized -> Icons.Filled.DirectionsCar
+        "yard" in normalized || "garden" in normalized || "outdoor" in normalized -> Icons.Filled.Yard
+        "office" in normalized || "study" in normalized -> Icons.Filled.Chair
+        else -> Icons.Filled.Home
     }
 }

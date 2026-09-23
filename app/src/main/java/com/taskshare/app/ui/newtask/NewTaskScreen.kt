@@ -1,9 +1,11 @@
 package com.taskshare.app.ui.newtask
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -13,7 +15,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,6 +28,7 @@ import com.taskshare.app.data.model.Frequency
 import com.taskshare.app.data.model.FrequencyUnit
 import com.taskshare.app.data.model.Priority
 import com.taskshare.app.data.repository.TaskRepository
+import com.taskshare.app.ui.theme.TaskShareTopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +44,7 @@ fun NewTaskScreen(repository: TaskRepository, onSaved: () -> Unit, onCancel: () 
     var priority by remember { mutableStateOf(Priority.MEDIUM) }
     var selectedOwnerIds by remember { mutableStateOf(setOf<String>()) }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("New task") }) }) { padding ->
+    Scaffold(topBar = { TaskShareTopBar(title = "New task", onBack = onCancel) }) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -60,12 +62,18 @@ fun NewTaskScreen(repository: TaskRepository, onSaved: () -> Unit, onCancel: () 
             )
 
             Text("Done once every", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
-            Row(modifier = Modifier.padding(top = 4.dp)) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
+            ) {
                 OutlinedTextField(
                     value = quantityText,
                     onValueChange = { quantityText = it.filter(Char::isDigit) },
                     label = { Text("x") },
-                    modifier = Modifier.padding(end = 8.dp),
+                    modifier = Modifier
+                        .width(80.dp)
+                        .padding(end = 8.dp),
                 )
                 FrequencyUnit.entries.forEach { u ->
                     FilterChip(
@@ -78,7 +86,11 @@ fun NewTaskScreen(repository: TaskRepository, onSaved: () -> Unit, onCancel: () 
             }
 
             Text("Priority", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
-            Row(modifier = Modifier.padding(top = 4.dp)) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
+            ) {
                 Priority.entries.forEach { p ->
                     FilterChip(
                         selected = priority == p,
@@ -90,7 +102,11 @@ fun NewTaskScreen(repository: TaskRepository, onSaved: () -> Unit, onCancel: () 
             }
 
             Text("Owners", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 16.dp))
-            Row(modifier = Modifier.padding(top = 4.dp)) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .horizontalScroll(rememberScrollState()),
+            ) {
                 users.forEach { user ->
                     FilterChip(
                         selected = user.id in selectedOwnerIds,
@@ -107,23 +123,23 @@ fun NewTaskScreen(repository: TaskRepository, onSaved: () -> Unit, onCancel: () 
                 }
             }
 
-            Row(modifier = Modifier.padding(top = 24.dp)) {
-                Button(onClick = onCancel, modifier = Modifier.padding(end = 8.dp)) { Text("Cancel") }
-                Button(
-                    enabled = name.isNotBlank() && quantityText.toIntOrNull()?.let { it > 0 } == true,
-                    onClick = {
-                        viewModel.save(
-                            name = name,
-                            description = description,
-                            location = location,
-                            frequency = Frequency(quantityText.toInt(), unit),
-                            ownerIds = selectedOwnerIds.toList(),
-                            priority = priority,
-                            onSaved = onSaved,
-                        )
-                    },
-                ) { Text("Save task") }
-            }
+            Button(
+                enabled = name.isNotBlank() && quantityText.toIntOrNull()?.let { it > 0 } == true,
+                onClick = {
+                    viewModel.save(
+                        name = name,
+                        description = description,
+                        location = location,
+                        frequency = Frequency(quantityText.toInt(), unit),
+                        ownerIds = selectedOwnerIds.toList(),
+                        priority = priority,
+                        onSaved = onSaved,
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 24.dp),
+            ) { Text("Save task") }
         }
     }
 }
