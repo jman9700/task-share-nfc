@@ -2,6 +2,7 @@ package com.taskshare.app.nfc
 
 import android.content.Context
 import com.taskshare.app.TaskShareApp
+import com.taskshare.app.permissions.BluetoothPermissions
 import com.taskshare.app.transport.BluetoothRfcommServer
 import com.taskshare.app.transport.ble.BlePairingAdvertiser
 import com.taskshare.app.update.LocalAppVersion
@@ -23,6 +24,12 @@ import kotlinx.coroutines.launch
  * needs a small protocol addition (a request flag after the payload exchange) that's still part
  * of the still-open "known gap" for APK distribution, not this fix. A peer that requests a pull
  * against this responder will just see its read fail once we close the socket.
+ *
+ * Permissions: since there's no Activity here, this can only use permissions already granted
+ * beforehand — see BluetoothPermissionScreen, shown right after onboarding for exactly this
+ * reason. If the user skipped it (or revoked it later), [BluetoothPermissions.allGranted] below
+ * short-circuits before touching the radio at all, rather than relying solely on a caught
+ * SecurityException from deeper in BlePairingAdvertiser/BluetoothRfcommServer.
  */
 class PassiveSyncResponder(private val context: Context) {
 
@@ -30,6 +37,8 @@ class PassiveSyncResponder(private val context: Context) {
 
     /** Fire-and-forget: must return immediately since this is called from an APDU callback. */
     fun respondAsync(sessionToken: String) {
+        if (!BluetoothPermissions.allGranted(context)) return
+
         scope.launch {
             val advertiser = BlePairingAdvertiser(context)
             try {

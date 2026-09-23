@@ -125,15 +125,20 @@ Run the GUI E2E tests on a connected device/emulator with:
    `HostApduService`'s process lifecycle.
 2. ~~`BluetoothDeviceTransport` wire codec.~~ **Resolved** — `SyncPayloadCodec` is a real,
    unit-tested implementation now (see `SyncPayloadCodecTest`), not a `TODO()` stub.
-3. **Runtime permissions.** `BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN`/`BLUETOOTH_ADVERTISE` (API 31+)
-   and `ACCESS_FINE_LOCATION` (API 26–30, required for BLE scanning below API 31 regardless of
-   the `neverForLocation` flag) need to be requested from the share screen before a sync starts.
-   Not yet implemented — currently, a missing grant just makes the BLE advertise/scan calls
-   silently no-op or throw a caught `SecurityException`, which surfaces as a timeout/error in the
-   UI rather than a permission prompt. `PassiveSyncResponder` in particular runs from a
-   background service with no Activity to request permissions from, so this has to be solved by
-   requesting the permissions proactively (e.g. the first time the user opens the share screen),
-   not lazily at connection time.
+3. ~~Runtime permissions.~~ **Resolved** —
+   [`BluetoothPermissionScreen`](app/src/main/java/com/taskshare/app/ui/permissions/BluetoothPermissionScreen.kt)
+   requests `BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN`/`BLUETOOTH_ADVERTISE` (API 31+) or
+   `ACCESS_FINE_LOCATION` (API 26–30) right after onboarding, since `PassiveSyncResponder` runs
+   from a background service with no Activity to request permissions from later — waiting until
+   the user opens the share screen wouldn't be enough to reliably serve an incoming tap.
+   Declining doesn't block the rest of the app; it's skippable, with an in-context "grant
+   permission" prompt added to `ShareUpdateScreen` itself as a second chance, and
+   `BluetoothDeviceTransport.connect()` now fails fast with a clear message
+   (`MissingBluetoothPermissionException`) instead of a bare `SecurityException` several layers
+   down. See `BluetoothPermissionsTest` for the API-level branching logic and
+   `BluetoothPermissionScreenTest` for the routing behavior — **not yet hardware-validated**
+   beyond that: real OEM permission-dialog UX (timing, "don't ask again" flows) still needs a
+   two-device pass, same as the rest of this transport.
 4. **APK distribution end-to-end.** The "pull a newer version and prompt to install" flow
    (`ShareUpdateScreen`'s version-prompt dialog → `TransportSession.pullApk` →
    `MainActivity.requestInstall`) works from the active/client side, but `PassiveSyncResponder`

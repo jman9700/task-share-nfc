@@ -1,5 +1,7 @@
 package com.taskshare.app.ui.share
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,12 +22,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.taskshare.app.data.repository.TaskRepository
 import com.taskshare.app.nfc.NfcHandshake
+import com.taskshare.app.permissions.BluetoothPermissions
 import com.taskshare.app.transport.DeviceTransport
 import java.io.File
 
@@ -45,6 +52,11 @@ fun ShareUpdateScreen(
         factory = ShareUpdateViewModel.factory(repository, nfcHandshake, transport, localVersionCode, localVersionName)
     )
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    var hasBluetoothPermission by remember { mutableStateOf(BluetoothPermissions.allGranted(context)) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        hasBluetoothPermission = results.values.all { it }
+    }
 
     Scaffold(
         topBar = {
@@ -64,6 +76,20 @@ fun ShareUpdateScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (!hasBluetoothPermission) {
+                Text(
+                    "Task Share needs Bluetooth permission to sync — NFC only handles the initial " +
+                        "handshake, the actual task list moves over Bluetooth.",
+                )
+                Button(
+                    onClick = { permissionLauncher.launch(BluetoothPermissions.required()) },
+                    modifier = Modifier.padding(top = 16.dp),
+                ) {
+                    Text("Grant Bluetooth permission")
+                }
+                return@Column
+            }
+
             when (val s = state) {
                 is ShareState.Idle -> {
                     Text(

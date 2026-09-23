@@ -16,10 +16,12 @@ import com.taskshare.app.data.sync.SyncInstanceDto
 import com.taskshare.app.data.sync.SyncPayload
 import com.taskshare.app.data.sync.SyncTaskDto
 import com.taskshare.app.nfc.FakeNfcHandshake
+import com.taskshare.app.permissions.BluetoothPermissions
 import com.taskshare.app.testing.TaskShareTestHooks
 import com.taskshare.app.transport.FakeDeviceTransport
 import com.taskshare.app.transport.PairingInfo
 import com.taskshare.app.update.RemoteAppVersion
+import androidx.test.rule.GrantPermissionRule
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -32,9 +34,16 @@ import java.time.Instant
  * ViewModels. The NFC tap and Bluetooth radio are swapped for fakes via TaskShareTestHooks
  * (set up before MainActivity launches) since two physical phones can't be tapped together in
  * CI; see README "Testing strategy" for why this is the deliberate tradeoff for this project.
+ *
+ * Bluetooth permissions are pre-granted here via GrantPermissionRule so these tests reach Main
+ * screen the same way a user who already granted them would — the permission-request screen
+ * itself (shown when they haven't) is covered separately by BluetoothPermissionScreenTest.
  */
 @RunWith(AndroidJUnit4::class)
 class AddTaskAndSyncFlowTest {
+
+    @get:Rule
+    val permissionRule: GrantPermissionRule = GrantPermissionRule.grant(*BluetoothPermissions.required())
 
     @get:Rule
     val composeRule = createEmptyComposeRule()

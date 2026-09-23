@@ -9,13 +9,16 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.platform.LocalContext
 import com.taskshare.app.data.repository.TaskRepository
 import com.taskshare.app.nfc.NfcHandshake
+import com.taskshare.app.permissions.BluetoothPermissions
 import com.taskshare.app.transport.DeviceTransport
 import com.taskshare.app.ui.calendar.CalendarScreen
 import com.taskshare.app.ui.main.MainScreen
 import com.taskshare.app.ui.newtask.NewTaskScreen
 import com.taskshare.app.ui.onboarding.OnboardingScreen
+import com.taskshare.app.ui.permissions.BluetoothPermissionScreen
 import com.taskshare.app.ui.share.ShareUpdateScreen
 import java.io.File
 
@@ -29,22 +32,39 @@ fun TaskShareNavHost(
     apkDownloadDestination: () -> File,
     onInstallApk: (File) -> Unit,
 ) {
+    val context = LocalContext.current
     val navController = rememberNavController()
     var checkedOnboarding by remember { mutableStateOf(false) }
     var needsOnboarding by remember { mutableStateOf(false) }
+    var needsBluetoothPermissions by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         needsOnboarding = !repository.hasLocalUser()
+        needsBluetoothPermissions = !BluetoothPermissions.allGranted(context)
         checkedOnboarding = true
     }
 
     if (!checkedOnboarding) return
 
-    NavHost(navController = navController, startDestination = if (needsOnboarding) Routes.ONBOARDING else Routes.MAIN) {
+    val startDestination = when {
+        needsOnboarding -> Routes.ONBOARDING
+        needsBluetoothPermissions -> Routes.BLUETOOTH_PERMISSIONS
+        else -> Routes.MAIN
+    }
+
+    NavHost(navController = navController, startDestination = startDestination) {
         composable(Routes.ONBOARDING) {
             OnboardingScreen(repository = repository, onDone = {
-                navController.navigate(Routes.MAIN) {
+                val next = if (!BluetoothPermissions.allGranted(context)) Routes.BLUETOOTH_PERMISSIONS else Routes.MAIN
+                navController.navigate(next) {
                     popUpTo(Routes.ONBOARDING) { inclusive = true }
+                }
+            })
+        }
+        composable(Routes.BLUETOOTH_PERMISSIONS) {
+            BluetoothPermissionScreen(onDone = {
+                navController.navigate(Routes.MAIN) {
+                    popUpTo(Routes.BLUETOOTH_PERMISSIONS) { inclusive = true }
                 }
             })
         }

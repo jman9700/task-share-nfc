@@ -5,6 +5,8 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import com.taskshare.app.data.sync.SyncPayload
+import com.taskshare.app.permissions.BluetoothPermissions
+import com.taskshare.app.permissions.MissingBluetoothPermissionException
 import com.taskshare.app.transport.ble.BlePairingScanner
 import com.taskshare.app.update.RemoteAppVersion
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,11 @@ class BluetoothDeviceTransport(
 ) : DeviceTransport {
 
     override suspend fun connect(pairingInfo: PairingInfo): TransportSession = withContext(Dispatchers.IO) {
+        if (!BluetoothPermissions.allGranted(context)) {
+            throw MissingBluetoothPermissionException(
+                "Bluetooth permission is needed to sync. Grant it from the Share screen and try again."
+            )
+        }
         val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         val adapter: BluetoothAdapter = manager?.adapter ?: error("No Bluetooth adapter on this device")
 
