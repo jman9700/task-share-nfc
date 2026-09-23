@@ -5,10 +5,19 @@
 
     <!-- Bluetooth is the actual bulk-data transport; NFC only carries the pairing handshake. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!-- BLE scan/advertise are how a device's real Bluetooth address is discovered post-handshake
+         (see transport/ble/BlePairingAdvertiser.kt); neverForLocation asserts we only match a
+         session token and never use scan results to infer location, so API 31+ doesn't also
+         require a location permission for this. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Below API 31, BLE scanning requires location permission regardless of intent — an
+         Android platform quirk, not something neverForLocation can opt out of pre-31. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
 
     <!-- Needed to prompt the user to install a newer APK pulled from a peer device. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />

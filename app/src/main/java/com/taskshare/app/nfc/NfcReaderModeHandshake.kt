@@ -14,10 +14,10 @@ import kotlin.coroutines.resumeWithException
  * Reader side of the NFC handshake: enables NFC reader mode while the share screen is open, and
  * on tap, talks to the peer's [NfcHandshakeHostService] to pull its [PairingInfo].
  *
- * NOT YET HARDWARE-TESTED — see BluetoothDeviceTransport and NfcHandshakeHostService for the
- * related known gaps (Bluetooth MAC retrieval in particular) that block a real end-to-end tap
- * from working today. Structurally wired so the share screen can call a real implementation as
- * those gaps get closed, without changing the UI layer.
+ * NOT YET HARDWARE-TESTED — see BluetoothDeviceTransport for the remaining known gaps (runtime
+ * permission prompts, bonding UX) that block a real end-to-end tap from working today.
+ * Structurally wired so the share screen can call a real implementation as those get closed,
+ * without changing the UI layer.
  */
 class NfcReaderModeHandshake(private val activity: Activity) : NfcHandshake {
 
@@ -59,8 +59,8 @@ class NfcReaderModeHandshake(private val activity: Activity) : NfcHandshake {
             require(statusBytes.contentEquals(SW_OK)) { "Peer returned error status" }
 
             val body = String(response.copyOfRange(0, response.size - 2), StandardCharsets.UTF_8)
-            val (deviceId, bluetoothAddress, sessionToken) = body.split("|", limit = 3)
-            return PairingInfo(deviceId, bluetoothAddress, sessionToken)
+            val (deviceId, sessionToken) = body.split("|", limit = 2)
+            return PairingInfo(deviceId, sessionToken)
         } finally {
             isoDep.close()
         }

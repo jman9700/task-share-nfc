@@ -2,7 +2,6 @@ package com.taskshare.app
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,6 +16,7 @@ import com.taskshare.app.transport.BluetoothDeviceTransport
 import com.taskshare.app.transport.DeviceTransport
 import com.taskshare.app.ui.navigation.TaskShareNavHost
 import com.taskshare.app.ui.theme.TaskShareTheme
+import com.taskshare.app.update.LocalAppVersion
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -27,10 +27,7 @@ class MainActivity : ComponentActivity() {
         val app = application as TaskShareApp
         val nfcHandshake: NfcHandshake = TaskShareTestHooks.nfcHandshakeOverride ?: NfcReaderModeHandshake(this)
         val transport: DeviceTransport = TaskShareTestHooks.transportOverride ?: BluetoothDeviceTransport(this)
-        val versionCode = packageManager.getPackageInfo(packageName, 0).let {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) it.longVersionCode else it.versionCode.toLong()
-        }
-        val versionName = packageManager.getPackageInfo(packageName, 0).versionName ?: "unknown"
+        val localVersion = LocalAppVersion.get(this)
 
         setContent {
             TaskShareTheme {
@@ -39,8 +36,8 @@ class MainActivity : ComponentActivity() {
                         repository = app.repository,
                         nfcHandshake = nfcHandshake,
                         transport = transport,
-                        localVersionCode = versionCode,
-                        localVersionName = versionName,
+                        localVersionCode = localVersion.versionCode,
+                        localVersionName = localVersion.versionName,
                         apkDownloadDestination = { newApkDestination() },
                         onInstallApk = { file -> requestInstall(file) },
                     )

@@ -19,8 +19,14 @@ interface DeviceTransport {
 
 data class PairingInfo(
     val peerDeviceId: String,
-    /** Bluetooth MAC address of the peer, obtained via the NFC handshake payload. */
-    val bluetoothAddress: String,
+    /**
+     * A random per-tap identifier — NOT a Bluetooth address. Android has blocked apps from
+     * reading their own Bluetooth MAC since 6.0, so the NFC handshake can no longer hand over an
+     * address directly. Instead this token is what the peer advertises over BLE right after the
+     * tap; the connecting side discovers it via a BLE scan and reads the REAL address off the
+     * scan result — that read is not restricted, only reading your own adapter's address is. See
+     * transport/ble/BlePairingAdvertiser.kt and BlePairingScanner.kt.
+     */
     val sessionToken: String,
 )
 

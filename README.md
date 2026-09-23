@@ -36,20 +36,38 @@ See [`SyncMerger`](app/src/main/java/com/taskshare/app/data/sync/SyncMerger.kt) 
 merge rules and [`SyncMergerTest`](app/src/test/java/com/taskshare/app/data/sync/SyncMergerTest.kt)
 for the behavior this locks in.
 
-### Transport: NFC handshake + Bluetooth payload
+### Transport: NFC handshake + BLE discovery + Bluetooth payload
 
 Classic Android NFC (NDEF push / "Android Beam") was deprecated in Android 10 and its bandwidth
 is far too low for a task database or an APK anyway. So NFC is used **only** for a tap-to-pair
-handshake (exchanging a peer id, Bluetooth address, and a session token); the actual sync
-payload and any APK pull happen over Bluetooth Classic (RFCOMM), chosen over BLE for its better
-throughput on APK-sized transfers.
+handshake; the actual sync payload and any APK pull happen over Bluetooth Classic (RFCOMM),
+chosen over BLE for its better throughput on APK-sized transfers.
+
+The handshake can't hand over a Bluetooth address directly — Android has blocked apps from
+reading their own adapter's address since 6.0. Instead NFC carries a random per-tap
+`sessionToken`; the tapped phone advertises that token over BLE
+([`BlePairingAdvertiser`](app/src/main/java/com/taskshare/app/transport/ble/BlePairingAdvertiser.kt))
+and the phone that initiated the tap scans for it
+([`BlePairingScanner`](app/src/main/java/com/taskshare/app/transport/ble/BlePairingScanner.kt)),
+reading the peer's *real* address off the scan result — that read is unrestricted; only reading
+your own address is. Once the address is known, the two sides connect over Classic RFCOMM as
+before. The tapped phone has no screen open during any of this (HCE services run in the
+background), so it's driven entirely by
+[`PassiveSyncResponder`](app/src/main/java/com/taskshare/app/nfc/PassiveSyncResponder.kt) from
+inside `NfcHandshakeHostService`, using the same `BluetoothTransportSession` protocol code the
+active side uses — both ends run identical send-then-receive steps once the socket is open, so
+neither needs to know whether it's the "client" or the "server".
 
 - [`nfc/NfcHandshake.kt`](app/src/main/java/com/taskshare/app/nfc/NfcHandshake.kt) — interface.
   `NfcReaderModeHandshake` (reader side) + `NfcHandshakeHostService` (HCE "tag" side) are real
   but **not yet hardware-validated** — see "Known gaps" below.
 - [`transport/DeviceTransport.kt`](app/src/main/java/com/taskshare/app/transport/DeviceTransport.kt)
-  — interface. `BluetoothDeviceTransport` is the real Bluetooth Classic implementation (also not
-  yet hardware-validated); `FakeDeviceTransport` is an in-process loopback used by tests.
+  — interface. `BluetoothDeviceTransport` (client/active side) and `BluetoothRfcommServer`
+  (accept/passive side) are the real Bluetooth Classic implementations (not yet
+  hardware-validated); `FakeDeviceTransport` is an in-process loopback used by tests.
+- [`transport/SyncPayloadCodec.kt`](app/src/main/java/com/taskshare/app/transport/SyncPayloadCodec.kt)
+  — the actual wire format (length-prefixed fields, no new dependency), unit tested for round-trip
+  correctness including empty payloads and unicode/delimiter-like text.
 
 ### Local storage
 
@@ -97,20 +115,33 @@ Run the GUI E2E tests on a connected device/emulator with:
 
 ## Known gaps (need real hardware to close)
 
-1. **Bluetooth MAC address retrieval.** Since Android 6.0, `BluetoothAdapter.getAddress()`
-   returns a placeholder, not the real MAC, for privacy reasons. `NfcHandshakeHostService`
-   currently has a `TODO_PLACEHOLDER_ADDRESS` where a real address is needed. Needs a design
-   change (e.g. rely on OS-level Bluetooth discoverability/pairing instead of a literal MAC
-   string, or switch to BLE with an advertised identifier) validated on real devices.
-2. **`BluetoothDeviceTransport` wire codec.** `SyncPayloadCodec.encode/decode` are `TODO()`
-   stubs — the transport shape (framed length-prefixed messages) is real, but payload
-   serialization (likely `kotlinx.serialization` JSON) isn't wired up yet.
-3. **Runtime permissions.** `BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN` (API 31+) and NFC reader-mode
-   behavior need to be requested/handled in the share screen; not yet implemented.
+1. ~~Bluetooth MAC address retrieval.~~ **Resolved** — see "Transport" above: NFC now only
+   carries a session token, and the real address comes from a BLE scan result instead of the
+   blocked `getAddress()` self-lookup. Structurally complete and unit-tested where it can be
+   (the codec), but the BLE advertise/scan/RFCOMM-accept path itself is still
+   **not yet hardware-validated** — two real phones are needed to confirm timing (how long a
+   tap needs to hold before BLE advertising is actually broadcasting), OEM BLE stack quirks, and
+   that `PassiveSyncResponder`'s background execution actually survives long enough inside a
+   `HostApduService`'s process lifecycle.
+2. ~~`BluetoothDeviceTransport` wire codec.~~ **Resolved** — `SyncPayloadCodec` is a real,
+   unit-tested implementation now (see `SyncPayloadCodecTest`), not a `TODO()` stub.
+3. **Runtime permissions.** `BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN`/`BLUETOOTH_ADVERTISE` (API 31+)
+   and `ACCESS_FINE_LOCATION` (API 26–30, required for BLE scanning below API 31 regardless of
+   the `neverForLocation` flag) need to be requested from the share screen before a sync starts.
+   Not yet implemented — currently, a missing grant just makes the BLE advertise/scan calls
+   silently no-op or throw a caught `SecurityException`, which surfaces as a timeout/error in the
+   UI rather than a permission prompt. `PassiveSyncResponder` in particular runs from a
+   background service with no Activity to request permissions from, so this has to be solved by
+   requesting the permissions proactively (e.g. the first time the user opens the share screen),
+   not lazily at connection time.
 4. **APK distribution end-to-end.** The "pull a newer version and prompt to install" flow
    (`ShareUpdateScreen`'s version-prompt dialog → `TransportSession.pullApk` →
-   `MainActivity.requestInstall`) is wired, but needs a real device pass: signing consistency
-   between the two installs, and the `REQUEST_INSTALL_PACKAGES` user consent flow.
+   `MainActivity.requestInstall`) works from the active/client side, but `PassiveSyncResponder`
+   doesn't yet serve APK bytes if asked — that needs a small protocol addition (a request flag
+   after the payload exchange) that hasn't been built. A pull attempt against the passive side
+   today will just fail once the socket closes, rather than transfer anything. Also still needs:
+   signing consistency between the two installs, and the `REQUEST_INSTALL_PACKAGES` user consent
+   flow on a real device.
 
 ## Open design questions
 

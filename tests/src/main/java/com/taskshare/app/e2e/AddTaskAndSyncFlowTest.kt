@@ -53,7 +53,7 @@ class AddTaskAndSyncFlowTest {
 
     @Test
     fun onboarding_thenAddTask_appearsOnMainScreen() {
-        TaskShareTestHooks.nfcHandshakeOverride = FakeNfcHandshake(PairingInfo("peer", "00:00:00:00:00:00", "token"))
+        TaskShareTestHooks.nfcHandshakeOverride = FakeNfcHandshake(PairingInfo("peer", "session-token"))
         TaskShareTestHooks.transportOverride = FakeDeviceTransport(
             peerPayload = SyncPayload("peer-device", emptyList(), emptyList(), emptyList()),
             peerVersion = RemoteAppVersion(1, "1.0"),
@@ -84,7 +84,7 @@ class AddTaskAndSyncFlowTest {
     @Test
     fun shareUpdate_mergesNewTaskAndInstanceFromPeer_additively() {
         val peerTaskName = "Vacuum"
-        TaskShareTestHooks.nfcHandshakeOverride = FakeNfcHandshake(PairingInfo("peer", "00:00:00:00:00:00", "token"))
+        TaskShareTestHooks.nfcHandshakeOverride = FakeNfcHandshake(PairingInfo("peer", "session-token"))
         TaskShareTestHooks.transportOverride = FakeDeviceTransport(
             peerPayload = SyncPayload(
                 senderDeviceId = "peer-device",
