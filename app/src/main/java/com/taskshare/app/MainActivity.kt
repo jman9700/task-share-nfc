@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 import com.taskshare.app.nfc.NfcHandshake
 import com.taskshare.app.nfc.NfcReaderModeHandshake
 import com.taskshare.app.testing.TaskShareTestHooks
@@ -17,6 +18,9 @@ import com.taskshare.app.transport.DeviceTransport
 import com.taskshare.app.ui.navigation.TaskShareNavHost
 import com.taskshare.app.ui.theme.TaskShareTheme
 import com.taskshare.app.update.LocalAppVersion
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -48,10 +52,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun newApkDestination(): File {
-        val dir = File(cacheDir, "transfer").apply { mkdirs() }
-        return File(dir, "task-share-update.apk")
-    }
+    /** FileProvider can only hand out URIs for paths under a root declared in
+     *  res/xml/file_paths.xml — this is the one declared there (cache-path "transfer/"). */
+    private fun transferDir(): File = File(cacheDir, "transfer").apply { mkdirs() }
+
+    private fun newApkDestination(): File = File(transferDir(), "task-share-update.apk")
 
     private fun requestInstall(apkFile: File) {
         val uri: Uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", apkFile)
@@ -73,12 +78,24 @@ class MainActivity : ComponentActivity() {
      * with the rest of this app.
      */
     private fun shareApkExternally() {
-        val uri: Uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", LocalAppVersion.apkFile(this))
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/vnd.android.package-archive"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        lifecycleScope.launch(Dispatchers.IO) {
+            // LocalAppVersion.apkFile() points into /data/app/..., which is NOT under any root
+            // FileProvider is configured for (see file_paths.xml) — and can't be, since that's
+            // the system's install directory, not app-private storage. Copy it into our own
+            // cache dir first, same as the download path already does for an *incoming* APK,
+            // then share that. Off the main thread since this is real file I/O.
+            val shareableApk = File(transferDir(), "task-share-app.apk")
+            LocalAppVersion.apkFile(this@MainActivity).copyTo(shareableApk, overwrite = true)
+
+            val uri: Uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", shareableApk)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/vnd.android.package-archive"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            withContext(Dispatchers.Main) {
+                startActivity(Intent.createChooser(intent, "Send Task Share app"))
+            }
         }
-        startActivity(Intent.createChooser(intent, "Send Task Share app"))
     }
 }
