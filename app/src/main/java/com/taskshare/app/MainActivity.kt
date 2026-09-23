@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
                         transport = transport,
                         localVersionCode = localVersion.versionCode,
                         localVersionName = localVersion.versionName,
+                        localApkSource = LocalAppVersion.apkFile(this),
                         apkDownloadDestination = { newApkDestination() },
                         onInstallApk = { file -> requestInstall(file) },
                     )

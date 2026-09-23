@@ -65,16 +65,30 @@ class BluetoothDeviceTransport(
 }
 
 /**
- * Wraps a connected RFCOMM socket and speaks the sync protocol. Shared by both sides of a sync:
- * the client obtains one from [BluetoothDeviceTransport.connect], the passive/accepting side
- * obtains one from [BluetoothRfcommServer.acceptOnce]. Each method here writes its own side of
- * the exchange first and then reads the peer's — since both sides run the exact same sequence of
- * calls in the same order, this works without either side needing to know it's the "client" or
- * "server" once the socket is open.
+ * Speaks the sync protocol over a pair of streams. Shared by both sides of a sync: the client
+ * obtains one from [BluetoothDeviceTransport.connect], the passive/accepting side obtains one
+ * from [BluetoothRfcommServer.acceptOnce]. Each method here writes its own side of the exchange
+ * first and then reads the peer's — since both sides run the exact same sequence of calls in the
+ * same order, this works without either side needing to know it's the "client" or "server" once
+ * the connection is open.
+ *
+ * Takes raw streams (plus a close callback) rather than a BluetoothSocket directly so the
+ * protocol logic can be exercised in a plain JVM test with in-memory piped streams standing in
+ * for two real sockets — see BluetoothTransportSessionTest, particularly for
+ * syncApkIfOutdated's role-negotiation, which is easy to get subtly wrong and hard to trust
+ * without a real two-ended test.
  */
-internal class BluetoothTransportSession(private val socket: BluetoothSocket) : TransportSession {
-    private val input = DataInputStream(socket.inputStream)
-    private val output = DataOutputStream(socket.outputStream)
+internal class BluetoothTransportSession(
+    private val input: DataInputStream,
+    private val output: DataOutputStream,
+    private val onClose: () -> Unit,
+) : TransportSession {
+
+    constructor(socket: BluetoothSocket) : this(
+        DataInputStream(socket.inputStream),
+        DataOutputStream(socket.outputStream),
+        socket::close,
+    )
 
     override suspend fun exchangeSyncPayload(outgoing: SyncPayload): SyncPayload = withContext(Dispatchers.IO) {
         writeFrame(SyncPayloadCodec.encode(outgoing))
@@ -90,23 +104,36 @@ internal class BluetoothTransportSession(private val socket: BluetoothSocket) : 
             RemoteAppVersion(input.readLong(), input.readUTF())
         }
 
-    override suspend fun pullApk(destination: File): File = withContext(Dispatchers.IO) {
-        val size = input.readLong()
-        destination.outputStream().use { out ->
-            val buffer = ByteArray(8192)
-            var remaining = size
-            while (remaining > 0) {
-                val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                if (read < 0) break
-                out.write(buffer, 0, read)
-                remaining -= read
-            }
+    override suspend fun syncApkIfOutdated(
+        localVersionCode: Long,
+        peerVersionCode: Long,
+        isActiveSide: Boolean,
+        localApkSource: File,
+        destination: File,
+    ): File? = withContext(Dispatchers.IO) {
+        // One bit is enough to agree on roles — neither side needs to be told the other's
+        // version again, both already learned it from exchangeVersion.
+        output.writeBoolean(isActiveSide)
+        output.flush()
+        val peerIsActiveSide = input.readBoolean()
+        check(isActiveSide != peerIsActiveSide) {
+            "Both sides reported themselves as the same role (active=$isActiveSide) — protocol desync"
         }
-        destination
+
+        val activeVersionCode = if (isActiveSide) localVersionCode else peerVersionCode
+        val passiveVersionCode = if (isActiveSide) peerVersionCode else localVersionCode
+        if (activeVersionCode >= passiveVersionCode) return@withContext null // nothing to move
+
+        if (isActiveSide) {
+            receiveFile(destination)
+        } else {
+            sendFile(localApkSource)
+            null
+        }
     }
 
     override suspend fun close() = withContext(Dispatchers.IO) {
-        socket.close()
+        onClose()
     }
 
     private fun writeFrame(bytes: ByteArray) {
@@ -120,5 +147,26 @@ internal class BluetoothTransportSession(private val socket: BluetoothSocket) : 
         val bytes = ByteArray(size)
         input.readFully(bytes)
         return bytes
+    }
+
+    private fun sendFile(source: File) {
+        output.writeLong(source.length())
+        source.inputStream().use { it.copyTo(output) }
+        output.flush()
+    }
+
+    private fun receiveFile(destination: File): File {
+        val size = input.readLong()
+        destination.outputStream().use { out ->
+            val buffer = ByteArray(8192)
+            var remaining = size
+            while (remaining > 0) {
+                val read = input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                if (read < 0) break
+                out.write(buffer, 0, read)
+                remaining -= read
+            }
+        }
+        return destination
     }
 }

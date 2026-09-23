@@ -123,4 +123,35 @@ class AddTaskAndSyncFlowTest {
             composeRule.onNodeWithText("1 new task(s), 1 new completion(s), 0 new person(s) added.").assertExists()
         }
     }
+
+    @Test
+    fun shareUpdate_peerHasNewerVersion_offersUpdate_dismissingDoesNotInstall() {
+        TaskShareTestHooks.nfcHandshakeOverride = FakeNfcHandshake(PairingInfo("peer", "session-token"))
+        TaskShareTestHooks.transportOverride = FakeDeviceTransport(
+            peerPayload = SyncPayload("peer-device", emptyList(), emptyList(), emptyList()),
+            // The installed app's own versionCode is 1 (see app/build.gradle.kts); anything
+            // higher makes the peer look newer, which is all FakeDeviceTransport checks.
+            peerVersion = RemoteAppVersion(999, "9.9"),
+            fakeApkBytes = byteArrayOf(1, 2, 3),
+        )
+
+        ActivityScenario.launch(MainActivity::class.java).use {
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText("Your name").performTextInput("Sam")
+            composeRule.onNodeWithText("Get started").performClick()
+            composeRule.waitForIdle()
+
+            composeRule.onNodeWithContentDescription("Share update via NFC").performClick()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText("Start NFC tap").performClick()
+            composeRule.waitForIdle()
+
+            // Not clicking "Install now": that triggers a real system install intent via
+            // MainActivity.requestInstall, which isn't something to fire from an automated test.
+            composeRule.onNodeWithText("Update ready").assertExists()
+            composeRule.onNodeWithText("Not now").performClick()
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText("Update ready").assertDoesNotExist()
+        }
+    }
 }

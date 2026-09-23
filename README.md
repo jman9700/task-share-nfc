@@ -139,17 +139,32 @@ Run the GUI E2E tests on a connected device/emulator with:
    `BluetoothPermissionScreenTest` for the routing behavior — **not yet hardware-validated**
    beyond that: real OEM permission-dialog UX (timing, "don't ask again" flows) still needs a
    two-device pass, same as the rest of this transport.
-4. **APK distribution end-to-end.** The "pull a newer version and prompt to install" flow
-   (`ShareUpdateScreen`'s version-prompt dialog → `TransportSession.pullApk` →
-   `MainActivity.requestInstall`) works from the active/client side, but `PassiveSyncResponder`
-   doesn't yet serve APK bytes if asked — that needs a small protocol addition (a request flag
-   after the payload exchange) that hasn't been built. A pull attempt against the passive side
-   today will just fail once the socket closes, rather than transfer anything. Also still needs:
+4. ~~APK distribution end-to-end.~~ **Resolved, structurally** —
+   [`TransportSession.syncApkIfOutdated`](app/src/main/java/com/taskshare/app/transport/DeviceTransport.kt)
+   runs right after the sync payload exchange, on both sides: each side already knows both
+   version codes from `exchangeVersion`, so after one bit to agree on which side is
+   active/passive, both independently derive the same conclusion about whether bytes should move
+   and in which direction — no separate request/response round trip needed. Only the active
+   (tapping) side ever receives, and only if it's the older one; the passive/tapped side only
+   ever sends, since it has no UI to offer an install prompt from. Fetching happens
+   automatically as part of the sync, not gated by a user prompt — the actual user confirmation
+   (`ShareUpdateScreen`'s "Update ready" dialog) only gates the *install* trigger, since
+   downloading bytes into our own cache isn't the risky step. Covered by
+   `BluetoothTransportSessionTest` (piped-stream round trip covering older/newer/equal-version
+   cases) and a new `AddTaskAndSyncFlowTest` case for the UI path. **Not yet hardware-validated**:
    signing consistency between the two installs, and the `REQUEST_INSTALL_PACKAGES` user consent
-   flow on a real device.
+   flow, both need a real device pass — same as the rest of this transport.
 
 ## Open design questions
 
 - Task retirement currently has no cross-device propagation at all (see "Sync model" above). If
   that turns out to matter in practice, the fix is an archived/tombstone flag that syncs
   additively like a completion instance does — flagged here rather than built speculatively.
+- **Update consent is puller-side only.** The device that's behind shows itself an "install
+  this?" prompt; the donor device (the one with the newer version) is never asked, since nothing
+  changes on its end — it just serves a file it already has installed. This is a deliberate
+  simplification given the close-partner trust model this app assumes; a stricter reading would
+  ask the donor's permission too, which would need real new infrastructure (a system
+  Notification with actions, since `PassiveSyncResponder` has no screen open to ask from
+  directly, plus the `POST_NOTIFICATIONS` runtime permission on API 33+) — flagged here as a
+  considered tradeoff, not an oversight.

@@ -7,7 +7,10 @@ import java.io.File
 /**
  * In-process loopback transport used by E2E UI tests (see the :tests module) to drive the
  * real share/sync screens without Bluetooth or NFC hardware. Configured with a canned "peer"
- * payload/version the test wants the device under test to receive.
+ * payload/version the test wants the device under test to receive. [fakeApkBytes] is only
+ * written to the destination if the caller identifies as the active side and the peer version
+ * is newer than the local one passed in — mirroring the real transport's rule so tests can
+ * exercise the update-available path realistically.
  */
 class FakeDeviceTransport(
     private val peerPayload: SyncPayload,
@@ -27,7 +30,14 @@ class FakeDeviceTransport(
         override suspend fun exchangeVersion(localVersionCode: Long, localVersionName: String): RemoteAppVersion =
             peerVersion
 
-        override suspend fun pullApk(destination: File): File {
+        override suspend fun syncApkIfOutdated(
+            localVersionCode: Long,
+            peerVersionCode: Long,
+            isActiveSide: Boolean,
+            localApkSource: File,
+            destination: File,
+        ): File? {
+            if (!isActiveSide || localVersionCode >= peerVersionCode) return null
             destination.writeBytes(fakeApkBytes)
             return destination
         }

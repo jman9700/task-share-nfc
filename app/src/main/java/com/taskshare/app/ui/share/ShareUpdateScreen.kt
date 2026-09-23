@@ -44,12 +44,15 @@ fun ShareUpdateScreen(
     transport: DeviceTransport,
     localVersionCode: Long,
     localVersionName: String,
+    localApkSource: File,
     apkDownloadDestination: () -> File,
     onInstallApk: (File) -> Unit,
     onBack: () -> Unit,
 ) {
     val viewModel: ShareUpdateViewModel = viewModel(
-        factory = ShareUpdateViewModel.factory(repository, nfcHandshake, transport, localVersionCode, localVersionName)
+        factory = ShareUpdateViewModel.factory(
+            repository, nfcHandshake, transport, localVersionCode, localVersionName, localApkSource,
+        )
     )
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
@@ -96,7 +99,10 @@ fun ShareUpdateScreen(
                         "Hold your phone near your partner's phone. New tasks and completions from " +
                             "each device get added to the other — nothing already on either phone is changed.",
                     )
-                    Button(onClick = viewModel::startShare, modifier = Modifier.padding(top = 16.dp)) {
+                    Button(
+                        onClick = { viewModel.startShare(apkDownloadDestination()) },
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) {
                         Text("Start NFC tap")
                     }
                 }
@@ -122,20 +128,25 @@ fun ShareUpdateScreen(
                             modifier = Modifier.padding(top = 4.dp),
                         )
                     }
-                    if (s.newerPeerVersion != null) {
-                        VersionPromptDialog(
-                            peerVersionName = s.newerPeerVersion.versionName,
-                            onAccept = {
-                                viewModel.respondToVersionPrompt(true, apkDownloadDestination(), onInstallApk)
+                    var updateDialogDismissed by remember(s.availableUpdate) { mutableStateOf(false) }
+                    if (s.availableUpdate != null && !updateDialogDismissed) {
+                        UpdateReadyDialog(
+                            peerVersionName = s.availableUpdate.peerVersion.versionName,
+                            onInstall = {
+                                onInstallApk(s.availableUpdate.apkFile)
+                                updateDialogDismissed = true
                             },
-                            onDecline = { viewModel.respondToVersionPrompt(false, apkDownloadDestination()) {} },
+                            onDecline = { updateDialogDismissed = true },
                         )
                     }
                     TextButton(onClick = onBack, modifier = Modifier.padding(top = 16.dp)) { Text("Done") }
                 }
                 is ShareState.Error -> {
                     Text("Sync failed: ${s.message}", color = MaterialTheme.colorScheme.error)
-                    Button(onClick = viewModel::startShare, modifier = Modifier.padding(top = 16.dp)) {
+                    Button(
+                        onClick = { viewModel.startShare(apkDownloadDestination()) },
+                        modifier = Modifier.padding(top = 16.dp),
+                    ) {
                         Text("Try again")
                     }
                 }
@@ -145,12 +156,12 @@ fun ShareUpdateScreen(
 }
 
 @Composable
-private fun VersionPromptDialog(peerVersionName: String, onAccept: () -> Unit, onDecline: () -> Unit) {
+private fun UpdateReadyDialog(peerVersionName: String, onInstall: () -> Unit, onDecline: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDecline,
-        title = { Text("Newer app version found") },
-        text = { Text("Your partner's phone has Task Share $peerVersionName. Pull it from their phone and install it?") },
-        confirmButton = { TextButton(onClick = onAccept) { Text("Pull & install") } },
+        title = { Text("Update ready") },
+        text = { Text("Your partner's phone is on Task Share $peerVersionName. It's been downloaded — install it now?") },
+        confirmButton = { TextButton(onClick = onInstall) { Text("Install now") } },
         dismissButton = { TextButton(onClick = onDecline) { Text("Not now") } },
     )
 }

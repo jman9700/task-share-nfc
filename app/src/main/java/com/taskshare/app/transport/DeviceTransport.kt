@@ -37,8 +37,27 @@ interface TransportSession {
     /** Exchanges installed app version info, so either side can offer to pull a newer APK. */
     suspend fun exchangeVersion(localVersionCode: Long, localVersionName: String): RemoteAppVersion
 
-    /** Requests the peer's APK bytes and saves them locally; only called after user confirms the popup. */
-    suspend fun pullApk(destination: File): File
+    /**
+     * Run once by both sides, right after [exchangeSyncPayload] — no separate user confirmation
+     * gates this call itself, since fetching bytes into our own cache isn't the risky step;
+     * actually installing them is, and that's still gated by a separate UI prompt plus Android's
+     * own install-consent flow (see MainActivity.requestInstall). Only [isActiveSide] ever
+     * receives, and only if it's also the older side — the passive/tapped side never receives
+     * (it has no UI to ever offer an install prompt from), it only ever serves its own APK if
+     * asked. Both sides pass their own [localVersionCode]/the peer's [peerVersionCode] (already
+     * known from [exchangeVersion]) plus which role they are; each side derives the same
+     * conclusion about whether bytes should move and in which direction without needing any
+     * further back-and-forth beyond the one bit this method exchanges to agree on roles.
+     *
+     * Returns the downloaded file if this side received one, else null.
+     */
+    suspend fun syncApkIfOutdated(
+        localVersionCode: Long,
+        peerVersionCode: Long,
+        isActiveSide: Boolean,
+        localApkSource: File,
+        destination: File,
+    ): File?
 
     suspend fun close()
 }

@@ -29,6 +29,7 @@ fun TaskShareNavHost(
     transport: DeviceTransport,
     localVersionCode: Long,
     localVersionName: String,
+    localApkSource: File,
     apkDownloadDestination: () -> File,
     onInstallApk: (File) -> Unit,
 ) {
@@ -93,6 +94,7 @@ fun TaskShareNavHost(
                 transport = transport,
                 localVersionCode = localVersionCode,
                 localVersionName = localVersionName,
+                localApkSource = localApkSource,
                 apkDownloadDestination = apkDownloadDestination,
                 onInstallApk = onInstallApk,
                 onBack = { navController.popBackStack() },

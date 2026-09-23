@@ -2,6 +2,7 @@ package com.taskshare.app.update
 
 import android.content.Context
 import android.os.Build
+import java.io.File
 
 /** This device's own installed version, in the same shape used to describe a peer's. */
 object LocalAppVersion {
@@ -14,4 +15,8 @@ object LocalAppVersion {
         }
         return RemoteAppVersion(versionCode, info.versionName ?: "unknown")
     }
+
+    /** This device's own installed APK, readable without any special permission. */
+    fun apkFile(context: Context): File =
+        File(context.packageManager.getApplicationInfo(context.packageName, 0).sourceDir)
 }
