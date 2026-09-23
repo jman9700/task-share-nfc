@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
                         localApkSource = LocalAppVersion.apkFile(this),
                         apkDownloadDestination = { newApkDestination() },
                         onInstallApk = { file -> requestInstall(file) },
+                        onShareApkExternally = { shareApkExternally() },
                     )
                 }
             }
@@ -60,5 +61,24 @@ class MainActivity : ComponentActivity() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(intent)
+    }
+
+    /**
+     * Handles onboarding a phone that has NEVER installed Task Share, which our NFC handshake
+     * fundamentally cannot do — it needs the app already running on both ends (Android removed
+     * phone-to-phone NDEF push in Android 10). Instead this hands the APK to the standard Android
+     * share sheet, where the person picks a transport themselves — usually Nearby Share, which is
+     * a Play Services feature the *receiving* phone already has regardless of whether it has ever
+     * heard of Task Share, so it can still catch the file. No server/hosting involved, consistent
+     * with the rest of this app.
+     */
+    private fun shareApkExternally() {
+        val uri: Uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", LocalAppVersion.apkFile(this))
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/vnd.android.package-archive"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, "Send Task Share app"))
     }
 }

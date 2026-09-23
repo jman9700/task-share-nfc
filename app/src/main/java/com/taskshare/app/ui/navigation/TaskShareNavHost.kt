@@ -32,6 +32,7 @@ fun TaskShareNavHost(
     localApkSource: File,
     apkDownloadDestination: () -> File,
     onInstallApk: (File) -> Unit,
+    onShareApkExternally: () -> Unit,
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
@@ -97,6 +98,7 @@ fun TaskShareNavHost(
                 localApkSource = localApkSource,
                 apkDownloadDestination = apkDownloadDestination,
                 onInstallApk = onInstallApk,
+                onShareApkExternally = onShareApkExternally,
                 onBack = { navController.popBackStack() },
             )
         }

@@ -5,12 +5,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +46,7 @@ fun ShareUpdateScreen(
     localApkSource: File,
     apkDownloadDestination: () -> File,
     onInstallApk: (File) -> Unit,
+    onShareApkExternally: () -> Unit,
     onBack: () -> Unit,
 ) {
     val viewModel: ShareUpdateViewModel = viewModel(
@@ -93,6 +97,21 @@ fun ShareUpdateScreen(
                         modifier = Modifier.padding(top = 16.dp),
                     ) {
                         Text("Start NFC tap")
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 32.dp))
+
+                    Text(
+                        "Setting up a brand-new phone? NFC can't reach a phone with no apps on it " +
+                            "yet — send the installer file directly instead, e.g. via Nearby Share.",
+                    )
+                    OutlinedButton(
+                        onClick = onShareApkExternally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                    ) {
+                        Text("Send app to a new device")
                     }
                 }
                 is ShareState.WaitingForTap -> {

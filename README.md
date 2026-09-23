@@ -155,6 +155,30 @@ Run the GUI E2E tests on a connected device/emulator with:
    signing consistency between the two installs, and the `REQUEST_INSTALL_PACKAGES` user consent
    flow, both need a real device pass — same as the rest of this transport.
 
+**First install (bootstrapping a phone with no apps on it yet) is a separate, unsolved case
+by necessity.** Everything above — NFC handshake, BLE discovery, `syncApkIfOutdated` — requires
+Task Share already running on both phones; there's no way for it to reach a phone with nothing
+installed, since Android removed phone-to-phone NDEF push (Android Beam) in Android 10. For that
+case, `ShareUpdateScreen` has a separate "Send app to a new device" button
+(`MainActivity.shareApkExternally`) that hands the APK to the standard Android share sheet
+instead — typically **Nearby Share**, which is a Play Services feature the *receiving* phone
+already has regardless of whether Task Share has ever been on it. Not NFC-based, deliberately;
+mentioned here so the distinction isn't lost.
+
+## Calendar views
+
+`CalendarScreen` renders three genuinely different layouts per `CalendarMode`, not one list
+reflowed three ways:
+
+- **Day** — a single day's agenda.
+- **Week** — all 7 days (Sunday–Saturday) of the current week, each with its own agenda,
+  including days with nothing on them (shown as "No tasks" rather than omitted).
+- **Month** — a traditional 6-row calendar grid (via
+  [`MonthGrid`](app/src/main/java/com/taskshare/app/ui/calendar/MonthGrid.kt), unit-tested
+  separately from the screen) with leading/trailing days from adjacent months dimmed, a dot on
+  any day with entries, and tapping a day shows its agenda below the grid. Previous/next
+  navigation pages by the current mode's unit (day/week/month).
+
 ## Open design questions
 
 - Task retirement currently has no cross-device propagation at all (see "Sync model" above). If

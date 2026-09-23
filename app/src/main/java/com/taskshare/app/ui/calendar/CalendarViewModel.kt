@@ -19,6 +19,12 @@ data class CalendarUiState(
     val mode: CalendarMode = CalendarMode.WEEK,
     val rangeLabel: String = "",
     val entriesByDay: Map<LocalDate, List<CalendarEntry>> = emptyMap(),
+    /** The 7 dates (Sunday–Saturday) of the current week — only meaningful in WEEK mode. */
+    val weekDates: List<LocalDate> = emptyList(),
+    /** The 42-cell grid for the current month — only meaningful in MONTH mode. See MonthGrid. */
+    val monthGrid: List<MonthGridDay> = emptyList(),
+    /** The date whose agenda shows below the month grid; also the date shown in DAY mode. */
+    val selectedDate: LocalDate = LocalDate.now(),
 )
 
 class CalendarViewModel(private val repository: TaskRepository) : ViewModel() {
@@ -26,13 +32,15 @@ class CalendarViewModel(private val repository: TaskRepository) : ViewModel() {
     private val zone = ZoneId.systemDefault()
     private val mode = MutableStateFlow(CalendarMode.WEEK)
     private val anchor = MutableStateFlow(LocalDate.now(zone))
+    private val selectedDate = MutableStateFlow(LocalDate.now(zone))
 
     val uiState: StateFlow<CalendarUiState> = combine(
         repository.observeActiveTasks(),
         repository.observeInstances(),
         mode,
         anchor,
-    ) { tasks, instances, mode, anchor ->
+        selectedDate,
+    ) { tasks, instances, mode, anchor, selectedDate ->
         val (start, end) = rangeFor(mode, anchor)
         val entries = CalendarProjection.buildEntries(
             tasks, instances,
@@ -40,7 +48,14 @@ class CalendarViewModel(private val repository: TaskRepository) : ViewModel() {
             end.atStartOfDay(zone).toInstant(),
         )
         val byDay = entries.groupBy { it.at.atZone(zone).toLocalDate() }
-        CalendarUiState(mode = mode, rangeLabel = "$start – ${end.minusDays(1)}", entriesByDay = byDay)
+        CalendarUiState(
+            mode = mode,
+            rangeLabel = "$start – ${end.minusDays(1)}",
+            entriesByDay = byDay,
+            weekDates = if (mode == CalendarMode.WEEK) (0..6).map { start.plusDays(it.toLong()) } else emptyList(),
+            monthGrid = if (mode == CalendarMode.MONTH) MonthGrid.forMonth(anchor) else emptyList(),
+            selectedDate = if (mode == CalendarMode.DAY) anchor else selectedDate,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CalendarUiState())
 
     fun setMode(newMode: CalendarMode) {
@@ -48,7 +63,9 @@ class CalendarViewModel(private val repository: TaskRepository) : ViewModel() {
     }
 
     fun goToday() {
-        anchor.value = LocalDate.now(zone)
+        val today = LocalDate.now(zone)
+        anchor.value = today
+        selectedDate.value = today
     }
 
     fun step(forward: Boolean) {
@@ -60,6 +77,11 @@ class CalendarViewModel(private val repository: TaskRepository) : ViewModel() {
         }
     }
 
+    /** Picks which day's agenda shows below the month grid. */
+    fun selectDay(date: LocalDate) {
+        selectedDate.value = date
+    }
+
     private fun rangeFor(mode: CalendarMode, anchor: LocalDate): Pair<LocalDate, LocalDate> = when (mode) {
         CalendarMode.DAY -> anchor to anchor.plusDays(1)
         CalendarMode.WEEK -> {
@@ -67,8 +89,11 @@ class CalendarViewModel(private val repository: TaskRepository) : ViewModel() {
             start to start.plusDays(7)
         }
         CalendarMode.MONTH -> {
-            val start = anchor.withDayOfMonth(1)
-            start to start.plusMonths(1)
+            // The grid can show days from adjacent months (see MonthGrid), so entries are
+            // fetched for the full 42-day grid range, not just the calendar month, otherwise
+            // padding days would always show as empty even when they have real entries.
+            val grid = MonthGrid.forMonth(anchor)
+            grid.first().date to grid.last().date.plusDays(1)
         }
     }
 
