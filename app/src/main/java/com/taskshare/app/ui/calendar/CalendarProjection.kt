@@ -5,6 +5,7 @@ import com.taskshare.app.data.model.TaskInstance
 import com.taskshare.app.data.model.nextDueAt
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 
 enum class CalendarEntryType { COMPLETED, UPCOMING }
 
@@ -28,6 +29,7 @@ object CalendarProjection {
         instances: List<TaskInstance>,
         rangeStart: Instant,
         rangeEnd: Instant,
+        zone: ZoneId = ZoneId.systemDefault(),
     ): List<CalendarEntry> {
         val entries = mutableListOf<CalendarEntry>()
 
@@ -41,8 +43,22 @@ object CalendarProjection {
 
         for (task in tasks) {
             val taskInstances = instancesByTask[task.id].orEmpty()
-            val intervalMinutes = (task.frequency.intervalDays * 24 * 60).toLong().coerceAtLeast(1)
-            var next = task.nextDueAt(taskInstances)
+            val frequency = task.frequency
+            if (frequency == null) {
+                // One-time task: at most a single occurrence, ever, on its start date — and only
+                // if it hasn't already been done (it doesn't recur, so there's nothing further
+                // to project once it has a completion).
+                if (taskInstances.isEmpty()) {
+                    val at = task.nextDueAt(taskInstances, zone)
+                    if (at >= rangeStart && at < rangeEnd) {
+                        entries += CalendarEntry(task.id, task.name, at, CalendarEntryType.UPCOMING)
+                    }
+                }
+                continue
+            }
+
+            val intervalMinutes = (frequency.intervalDays * 24 * 60).toLong().coerceAtLeast(1)
+            var next = task.nextDueAt(taskInstances, zone)
             // Walk forward through the range; bounded by range width / interval so a
             // misconfigured (very short) frequency can't spin forever.
             var guard = 0

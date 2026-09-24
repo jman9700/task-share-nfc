@@ -10,10 +10,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
 
 class SyncMergerTest {
 
     private val now = Instant.parse("2026-01-01T00:00:00Z")
+    private val startDate = LocalDate.of(2026, 1, 1)
     private val weekly = Frequency(1, FrequencyUnit.WEEK)
 
     @Test
@@ -22,7 +24,7 @@ class SyncMergerTest {
             senderDeviceId = "device-b",
             users = emptyList(),
             tasks = listOf(
-                SyncTaskDto("Dishes", "", "Kitchen", weekly, listOf("u1"), Priority.MEDIUM, now)
+                SyncTaskDto("Dishes", "", "Kitchen", weekly, startDate, listOf("u1"), Priority.MEDIUM, now)
             ),
             instances = emptyList(),
         )
@@ -38,13 +40,13 @@ class SyncMergerTest {
     fun `tasks with the same normalized name on both devices merge into one, local wins`() {
         val local = Task(
             id = "local-1", name = "dishes", description = "", location = "Kitchen (mine)",
-            frequency = weekly, ownerIds = listOf("local-owner"), priority = Priority.LOW, createdAt = now,
+            frequency = weekly, startDate = startDate, ownerIds = listOf("local-owner"), priority = Priority.LOW, createdAt = now,
         )
         val payload = SyncPayload(
             senderDeviceId = "device-b",
             users = emptyList(),
             tasks = listOf(
-                SyncTaskDto("  Dishes ", "", "Kitchen (theirs)", weekly, listOf("remote-owner"), Priority.HIGH, now)
+                SyncTaskDto("  Dishes ", "", "Kitchen (theirs)", weekly, startDate, listOf("remote-owner"), Priority.HIGH, now)
             ),
             instances = emptyList(),
         )
@@ -58,7 +60,7 @@ class SyncMergerTest {
     fun `new completion instance attaches to the locally-matching task by name`() {
         val local = Task(
             id = "local-1", name = "Dishes", description = "", location = "Kitchen",
-            frequency = weekly, ownerIds = emptyList(), priority = Priority.LOW, createdAt = now,
+            frequency = weekly, startDate = startDate, ownerIds = emptyList(), priority = Priority.LOW, createdAt = now,
         )
         val payload = SyncPayload(
             senderDeviceId = "device-b",
@@ -80,7 +82,7 @@ class SyncMergerTest {
     fun `re-syncing the same payload twice never duplicates instances`() {
         val local = Task(
             id = "local-1", name = "Dishes", description = "", location = "Kitchen",
-            frequency = weekly, ownerIds = emptyList(), priority = Priority.LOW, createdAt = now,
+            frequency = weekly, startDate = startDate, ownerIds = emptyList(), priority = Priority.LOW, createdAt = now,
         )
         val existingInstance = TaskInstance("instance-1", "local-1", now, "u1")
         val payload = SyncPayload(
@@ -130,7 +132,7 @@ class SyncMergerTest {
         val payload = SyncPayload(
             senderDeviceId = "device-b",
             users = emptyList(),
-            tasks = listOf(SyncTaskDto("Vacuum", "", "Living room", weekly, emptyList(), Priority.MEDIUM, now)),
+            tasks = listOf(SyncTaskDto("Vacuum", "", "Living room", weekly, startDate, emptyList(), Priority.MEDIUM, now)),
             instances = listOf(SyncInstanceDto("instance-1", "Vacuum", now, "u1")),
         )
 

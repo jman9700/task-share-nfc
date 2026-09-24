@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.taskshare.app.data.model.FrequencyUnit
 import com.taskshare.app.data.model.Priority
 import java.time.Instant
+import java.time.LocalDate
 
 class Converters {
     @TypeConverter
@@ -11,6 +12,12 @@ class Converters {
 
     @TypeConverter
     fun epochMillisToInstant(value: Long?): Instant? = value?.let { Instant.ofEpochMilli(it) }
+
+    @TypeConverter
+    fun localDateToEpochDay(value: LocalDate?): Long? = value?.toEpochDay()
+
+    @TypeConverter
+    fun epochDayToLocalDate(value: Long?): LocalDate? = value?.let { LocalDate.ofEpochDay(it) }
 
     @TypeConverter
     fun frequencyUnitToString(value: FrequencyUnit): String = value.name

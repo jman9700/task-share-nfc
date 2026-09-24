@@ -1,9 +1,11 @@
 package com.taskshare.app.ui.calendar
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -59,25 +63,14 @@ fun CalendarScreen(repository: TaskRepository, onBack: () -> Unit) {
                     )
                 }
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { viewModel.step(forward = false) }) {
-                    Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous")
-                }
-                Text(
-                    state.rangeLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(start = 4.dp, end = 4.dp),
-                )
-                IconButton(onClick = { viewModel.step(forward = true) }) {
-                    Icon(Icons.Filled.ChevronRight, contentDescription = "Next")
-                }
-                TextButton(onClick = viewModel::goToday) { Text("Today") }
-            }
+
+            CalendarHeader(
+                title = state.headerTitle,
+                subtitle = state.headerSubtitle,
+                onPrevious = { viewModel.step(forward = false) },
+                onNext = { viewModel.step(forward = true) },
+                onToday = viewModel::goToday,
+            )
 
             when (state.mode) {
                 CalendarMode.DAY -> DayView(date = state.selectedDate, entriesByDay = state.entriesByDay)
@@ -90,6 +83,32 @@ fun CalendarScreen(repository: TaskRepository, onBack: () -> Unit) {
                 )
             }
         }
+    }
+}
+
+/** Title + subtitle format: e.g. "September" / "2026" for month, "Sep 20 – 26" / "2026" for week. */
+@Composable
+private fun CalendarHeader(title: String, subtitle: String, onPrevious: () -> Unit, onNext: () -> Unit, onToday: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onPrevious) {
+            Icon(Icons.Filled.ChevronLeft, contentDescription = "Previous")
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineSmall)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        IconButton(onClick = onNext) {
+            Icon(Icons.Filled.ChevronRight, contentDescription = "Next")
+        }
+        TextButton(onClick = onToday) { Text("Today") }
     }
 }
 
@@ -113,25 +132,46 @@ private fun DayView(date: LocalDate, entriesByDay: Map<LocalDate, List<CalendarE
     }
 }
 
+/** Each day gets its own bordered card — a clearly separate "section" of the week, not just a
+ *  run of headers in one continuous list — with today's card visually called out. */
 @Composable
 private fun WeekView(weekDates: List<LocalDate>, entriesByDay: Map<LocalDate, List<CalendarEntry>>) {
     val dayFormatter = DateTimeFormatter.ofPattern("EEEE, MMM d")
     val today = LocalDate.now()
-    LazyColumn(modifier = Modifier.fillMaxWidth()) {
-        weekDates.forEach { date ->
-            item {
-                Text(
-                    date.format(dayFormatter),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = if (date == today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                )
-            }
-            val entries = entriesByDay[date].orEmpty()
-            if (entries.isEmpty()) {
-                item { NoTasksLabel() }
-            } else {
-                items(entries) { AgendaRow(it) }
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = 8.dp),
+    ) {
+        items(weekDates) { date ->
+            val isToday = date == today
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isToday) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                ),
+                border = BorderStroke(
+                    width = if (isToday) 1.5.dp else 1.dp,
+                    color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            ) {
+                Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                    Text(
+                        date.format(dayFormatter),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    )
+                    val entries = entriesByDay[date].orEmpty()
+                    if (entries.isEmpty()) {
+                        NoTasksLabel()
+                    } else {
+                        entries.forEach { AgendaRow(it) }
+                    }
+                }
             }
         }
     }

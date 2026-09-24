@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Bed
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Chair
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Kitchen
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Weekend
 import androidx.compose.material.icons.filled.Yard
 import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,12 +45,19 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +68,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.taskshare.app.data.model.Task
 import com.taskshare.app.data.repository.TaskRepository
 import com.taskshare.app.ui.theme.StatusBadge
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,11 +120,10 @@ fun MainScreen(
                         if (group.tasks.isEmpty()) return@forEach
                         item { GroupHeader(group.label) }
                         items(group.tasks, key = { it.task.id }) { meta ->
-                            TaskRow(
-                                task = meta.task,
-                                urgency = meta.urgency,
-                                ownerNames = meta.ownerNames,
+                            DismissibleTaskRow(
+                                meta = meta,
                                 onMarkDone = { state.localUserId?.let { viewModel.markDone(meta.task.id, it) } },
+                                onRemove = { viewModel.removeTask(meta.task.id) },
                             )
                         }
                     }
@@ -193,8 +203,64 @@ private fun EmptyState() {
     }
 }
 
+/** Swipe (end-to-start) reveals a delete affordance; completing the swipe just opens a
+ *  confirmation dialog rather than committing immediately — removal is still local-only and
+ *  reversible only by re-syncing, so it's worth one extra tap to avoid an accidental swipe. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TaskRow(task: Task, urgency: Double, ownerNames: List<String>, onMarkDone: () -> Unit) {
+private fun DismissibleTaskRow(meta: TaskWithMeta, onMarkDone: () -> Unit, onRemove: () -> Unit) {
+    var showConfirm by remember { mutableStateOf(false) }
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) showConfirm = true
+            false // never let the box itself commit the dismiss; the dialog does
+        },
+    )
+
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text("Remove task?") },
+            text = {
+                Text(
+                    "\"${meta.task.name}\" will be removed from this device only. If your " +
+                        "partner's phone still has it, it may reappear the next time you sync.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showConfirm = false; onRemove() }) { Text("Remove") }
+            },
+            dismissButton = { TextButton(onClick = { showConfirm = false }) { Text("Cancel") } },
+        )
+    }
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.errorContainer),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    Icons.Filled.Delete,
+                    contentDescription = "Remove task",
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(end = 28.dp),
+                )
+            }
+        },
+    ) {
+        TaskRow(task = meta.task, displayState = meta.displayState, ownerNames = meta.ownerNames, onMarkDone = onMarkDone)
+    }
+}
+
+@Composable
+private fun TaskRow(task: Task, displayState: TaskDisplayState, ownerNames: List<String>, onMarkDone: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -212,7 +278,7 @@ private fun TaskRow(task: Task, urgency: Double, ownerNames: List<String>, onMar
             Column(modifier = Modifier.weight(1f)) {
                 Text(task.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "${task.location} · ${task.frequency.label()}",
+                    "${task.location} · ${task.frequency?.label() ?: "One-time"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -224,17 +290,37 @@ private fun TaskRow(task: Task, urgency: Double, ownerNames: List<String>, onMar
                     )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                UrgencyIndicator(urgency)
+                when (displayState) {
+                    is TaskDisplayState.Due -> UrgencyIndicator(displayState.urgency)
+                    is TaskDisplayState.NotStarted -> Text(
+                        "STARTS ${displayState.startDate.format(DateTimeFormatter.ofPattern("MMM d"))}",
+                        style = StatusBadge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    is TaskDisplayState.Completed -> Text(
+                        "COMPLETED",
+                        style = StatusBadge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(8.dp))
-            FilledIconButton(
-                onClick = onMarkDone,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
-            ) {
-                Icon(Icons.Filled.Check, contentDescription = "Mark ${task.name} done")
+            when (displayState) {
+                is TaskDisplayState.Due -> FilledIconButton(
+                    onClick = onMarkDone,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                ) {
+                    Icon(Icons.Filled.Check, contentDescription = "Mark ${task.name} done")
+                }
+                is TaskDisplayState.Completed -> Icon(
+                    Icons.Filled.Check,
+                    contentDescription = "${task.name} completed",
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                is TaskDisplayState.NotStarted -> Unit
             }
         }
     }

@@ -28,6 +28,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * Drives the real app UI end-to-end through Compose semantics — no unit-level shortcuts into
@@ -99,7 +100,7 @@ class AddTaskAndSyncFlowTest {
                 senderDeviceId = "peer-device",
                 users = emptyList(),
                 tasks = listOf(
-                    SyncTaskDto(peerTaskName, "", "Living room", Frequency(1, FrequencyUnit.WEEK), emptyList(), Priority.MEDIUM, Instant.now())
+                    SyncTaskDto(peerTaskName, "", "Living room", Frequency(1, FrequencyUnit.WEEK), LocalDate.now(), emptyList(), Priority.MEDIUM, Instant.now())
                 ),
                 instances = listOf(
                     SyncInstanceDto("peer-instance-1", peerTaskName, Instant.now(), "peer-user")

@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * Wire format for [SyncPayload]: plain length-prefixed java.io framing (DataOutputStream's
@@ -37,8 +38,12 @@ object SyncPayloadCodec {
                 out.writeUTF(task.name)
                 out.writeUTF(task.description)
                 out.writeUTF(task.location)
-                out.writeInt(task.frequency.quantity)
-                out.writeUTF(task.frequency.unit.name)
+                out.writeBoolean(task.frequency != null)
+                task.frequency?.let {
+                    out.writeInt(it.quantity)
+                    out.writeUTF(it.unit.name)
+                }
+                out.writeLong(task.startDate.toEpochDay())
                 out.writeInt(task.ownerIds.size)
                 for (ownerId in task.ownerIds) out.writeUTF(ownerId)
                 out.writeUTF(task.priority.name)
@@ -68,12 +73,16 @@ object SyncPayloadCodec {
                 val name = input.readUTF()
                 val description = input.readUTF()
                 val location = input.readUTF()
-                val frequencyQuantity = input.readInt()
-                val frequencyUnit = FrequencyUnit.valueOf(input.readUTF())
+                val frequency = if (input.readBoolean()) {
+                    Frequency(input.readInt(), FrequencyUnit.valueOf(input.readUTF()))
+                } else {
+                    null
+                }
+                val startDate = LocalDate.ofEpochDay(input.readLong())
                 val ownerIds = List(input.readInt()) { input.readUTF() }
                 val priority = Priority.valueOf(input.readUTF())
                 val createdAt = Instant.ofEpochMilli(input.readLong())
-                SyncTaskDto(name, description, location, Frequency(frequencyQuantity, frequencyUnit), ownerIds, priority, createdAt)
+                SyncTaskDto(name, description, location, frequency, startDate, ownerIds, priority, createdAt)
             }
 
             val instances = List(input.readInt()) {

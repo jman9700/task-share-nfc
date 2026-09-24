@@ -9,6 +9,7 @@ import com.taskshare.app.data.model.Priority
 import com.taskshare.app.data.model.Task
 import com.taskshare.app.data.model.TaskInstance
 import java.time.Instant
+import java.time.LocalDate
 
 @Entity(tableName = "household_users")
 data class HouseholdUserEntity(
@@ -27,8 +28,10 @@ data class TaskEntity(
     val normalizedName: String,
     val description: String,
     val location: String,
-    val frequencyQuantity: Int,
-    val frequencyUnit: FrequencyUnit,
+    /** Null means a one-time (non-repeating) task — see Task.frequency. */
+    val frequencyQuantity: Int?,
+    val frequencyUnit: FrequencyUnit?,
+    val startDate: LocalDate,
     val ownerIds: List<String>,
     val priority: Priority,
     val createdAt: Instant,
@@ -40,7 +43,8 @@ fun TaskEntity.toDomain() = Task(
     name = name,
     description = description,
     location = location,
-    frequency = Frequency(frequencyQuantity, frequencyUnit),
+    frequency = if (frequencyQuantity != null && frequencyUnit != null) Frequency(frequencyQuantity, frequencyUnit) else null,
+    startDate = startDate,
     ownerIds = ownerIds,
     priority = priority,
     createdAt = createdAt,
@@ -53,8 +57,9 @@ fun Task.toEntity() = TaskEntity(
     normalizedName = normalizedName,
     description = description,
     location = location,
-    frequencyQuantity = frequency.quantity,
-    frequencyUnit = frequency.unit,
+    frequencyQuantity = frequency?.quantity,
+    frequencyUnit = frequency?.unit,
+    startDate = startDate,
     ownerIds = ownerIds,
     priority = priority,
     createdAt = createdAt,

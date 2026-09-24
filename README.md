@@ -36,6 +36,34 @@ See [`SyncMerger`](app/src/main/java/com/taskshare/app/data/sync/SyncMerger.kt) 
 merge rules and [`SyncMergerTest`](app/src/test/java/com/taskshare/app/data/sync/SyncMergerTest.kt)
 for the behavior this locks in.
 
+### Scheduling model
+
+Every task requires a **start date**, chosen at creation (defaults to today) — this replaced an
+earlier version where scheduling was implicitly anchored to the task's creation timestamp, which
+broke down as soon as you wanted to set up a task that starts later, or backfill one you've
+actually been doing for a while before adding it to the app. `Task.startDate` is what
+[`urgencyScore`/`nextDueAt`](app/src/main/java/com/taskshare/app/data/model/Urgency.kt) count
+from instead of `createdAt`.
+
+- **Recurring tasks** (`frequency` set): the frequency counts forward from `startDate`, not
+  `createdAt`.
+- **Non-repeating tasks** (`frequency == null`, toggled off in the "Repeats" switch on the New
+  Task screen): done once, logged like any other completion. Per design decision, a completed
+  one-time task **stays visible** on the main list — shown with a `COMPLETED` badge instead of
+  the urgency bar — rather than disappearing; removing it (or any task) is a separate, explicit
+  action (see "Removing tasks" below).
+- **Future start dates**: a task whose start date hasn't arrived yet shows immediately on the
+  main list labeled `STARTS <date>` rather than with a due/overdue state — per design decision,
+  visible-but-clearly-not-actionable rather than hidden.
+
+### Removing tasks
+
+Swipe a task card (end-to-start) on the main list to reveal a delete affordance; completing the
+swipe opens a confirmation dialog rather than committing immediately (removal is local-only and
+not easily undone, see "Sync model" above — worth one extra tap). Confirming calls the same
+`TaskRepository.archiveTask` local-only archive that already existed; this just added the UI path
+to trigger it. See `MainScreen.kt`'s `DismissibleTaskRow`.
+
 ### Transport: NFC handshake + BLE discovery + Bluetooth payload
 
 Classic Android NFC (NDEF push / "Android Beam") was deprecated in Android 10 and its bandwidth
@@ -168,11 +196,16 @@ mentioned here so the distinction isn't lost.
 ## Calendar views
 
 `CalendarScreen` renders three genuinely different layouts per `CalendarMode`, not one list
-reflowed three ways:
+reflowed three ways. Above all three, a title/subtitle header (via
+[`headerFor`](app/src/main/java/com/taskshare/app/ui/calendar/CalendarViewModel.kt), unit-tested
+independent of the screen) replaces a flat ISO date-range label — e.g. "September" / "2026" for
+month mode, "Sep 20 – 26" / "2026" for week mode, "Thursday" / "September 24, 2026" for day mode.
 
 - **Day** — a single day's agenda.
-- **Week** — all 7 days (Sunday–Saturday) of the current week, each with its own agenda,
-  including days with nothing on them (shown as "No tasks" rather than omitted).
+- **Week** — all 7 days (Sunday–Saturday) of the current week, each rendered as its own bordered
+  card (a clearly separate section, not just a header in a continuous list) with its own agenda,
+  including days with nothing on them (shown as "No tasks" rather than omitted); today's card is
+  visually called out.
 - **Month** — a traditional 6-row calendar grid (via
   [`MonthGrid`](app/src/main/java/com/taskshare/app/ui/calendar/MonthGrid.kt), unit-tested
   separately from the screen) with leading/trailing days from adjacent months dimmed, a dot on

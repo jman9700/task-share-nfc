@@ -12,7 +12,7 @@ import net.sqlcipher.database.SupportFactory
 
 @Database(
     entities = [TaskEntity::class, TaskInstanceEntity::class, HouseholdUserEntity::class],
-    version = 1,
+    version = 2, // v2: added Task.startDate, made frequency nullable (one-time tasks)
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -33,6 +33,10 @@ abstract class AppDatabase : RoomDatabase() {
             val factory = SupportFactory(net.sqlcipher.database.SQLiteDatabase.getBytes(passphrase))
             return Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "task-share.db")
                 .openHelperFactory(factory)
+                // Pre-release app, no installed base to preserve data for yet — destructive
+                // migration is the standard, simplest choice until there's a real migration to
+                // write. Revisit before this app ever ships with real user data at stake.
+                .fallbackToDestructiveMigration()
                 .build()
         }
     }

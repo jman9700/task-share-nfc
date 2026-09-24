@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 class NewTaskViewModel(private val repository: TaskRepository) : ViewModel() {
 
@@ -22,13 +23,14 @@ class NewTaskViewModel(private val repository: TaskRepository) : ViewModel() {
         name: String,
         description: String,
         location: String,
-        frequency: Frequency,
+        frequency: Frequency?,
+        startDate: LocalDate,
         ownerIds: List<String>,
         priority: Priority,
         onSaved: () -> Unit,
     ) {
         viewModelScope.launch {
-            repository.createTask(name, description, location, frequency, ownerIds, priority)
+            repository.createTask(name, description, location, frequency, startDate, ownerIds, priority)
             onSaved()
         }
     }

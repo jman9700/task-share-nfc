@@ -18,6 +18,7 @@ import com.taskshare.app.data.sync.SyncInstanceDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 
 class TaskRepository(
@@ -38,7 +39,8 @@ class TaskRepository(
         name: String,
         description: String,
         location: String,
-        frequency: Frequency,
+        frequency: Frequency?,
+        startDate: LocalDate,
         ownerIds: List<String>,
         priority: Priority,
     ) {
@@ -48,6 +50,7 @@ class TaskRepository(
             description = description,
             location = location,
             frequency = frequency,
+            startDate = startDate,
             ownerIds = ownerIds,
             priority = priority,
             createdAt = Instant.now(),
@@ -72,7 +75,12 @@ class TaskRepository(
     suspend fun buildOutgoingPayload(): SyncPayload {
         val users = userDao.getAll().map { SyncUserDto(it.id, it.displayName) }
         val tasks = taskDao.getAll().filterNot { it.archived }.map {
-            SyncTaskDto(it.name, it.description, it.location, Frequency(it.frequencyQuantity, it.frequencyUnit), it.ownerIds, it.priority, it.createdAt)
+            val frequency = if (it.frequencyQuantity != null && it.frequencyUnit != null) {
+                Frequency(it.frequencyQuantity, it.frequencyUnit)
+            } else {
+                null
+            }
+            SyncTaskDto(it.name, it.description, it.location, frequency, it.startDate, it.ownerIds, it.priority, it.createdAt)
         }
         val instances = instanceDao.getAll().map { SyncInstanceDto(it.id, taskNameFor(it.taskId), it.completedAt, it.completedByUserId) }
         return SyncPayload(localDeviceId, users, tasks, instances)

@@ -10,6 +10,7 @@ import com.taskshare.app.data.sync.SyncUserDto
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.Instant
+import java.time.LocalDate
 
 class SyncPayloadCodecTest {
 
@@ -30,6 +31,7 @@ class SyncPayloadCodecTest {
                     description = "Load and run the dishwasher",
                     location = "Kitchen",
                     frequency = Frequency(2, FrequencyUnit.WEEK),
+                    startDate = LocalDate.of(2026, 1, 1),
                     ownerIds = listOf("u1", "u2"),
                     priority = Priority.HIGH,
                     createdAt = Instant.parse("2026-01-01T00:00:00Z"),
@@ -39,6 +41,7 @@ class SyncPayloadCodecTest {
                     description = "",
                     location = "",
                     frequency = Frequency(1, FrequencyUnit.DAY),
+                    startDate = LocalDate.of(2026, 1, 2),
                     ownerIds = emptyList(),
                     priority = Priority.LOW,
                     createdAt = Instant.parse("2026-01-02T12:30:00Z"),
@@ -64,6 +67,7 @@ class SyncPayloadCodecTest {
                     description = "Uses a pipe | and emoji 🧹",
                     location = "Attic\nUpstairs",
                     frequency = Frequency(3, FrequencyUnit.MONTH),
+                    startDate = LocalDate.of(2026, 2, 1),
                     ownerIds = listOf("u1"),
                     priority = Priority.MEDIUM,
                     createdAt = Instant.parse("2026-02-01T00:00:00Z"),
@@ -73,5 +77,30 @@ class SyncPayloadCodecTest {
         )
 
         assertEquals(payload, SyncPayloadCodec.decode(SyncPayloadCodec.encode(payload)))
+    }
+
+    @Test
+    fun `round trip preserves a one-time task with null frequency`() {
+        val payload = SyncPayload(
+            senderDeviceId = "device-a",
+            users = emptyList(),
+            tasks = listOf(
+                SyncTaskDto(
+                    name = "Return library books",
+                    description = "",
+                    location = "",
+                    frequency = null,
+                    startDate = LocalDate.of(2026, 3, 15),
+                    ownerIds = emptyList(),
+                    priority = Priority.MEDIUM,
+                    createdAt = Instant.parse("2026-03-01T00:00:00Z"),
+                )
+            ),
+            instances = emptyList(),
+        )
+
+        val decoded = SyncPayloadCodec.decode(SyncPayloadCodec.encode(payload))
+        assertEquals(payload, decoded)
+        assertEquals(null, decoded.tasks.single().frequency)
     }
 }

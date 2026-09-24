@@ -55,6 +55,7 @@ object SyncMerger {
                     description = dto.description,
                     location = dto.location,
                     frequency = dto.frequency,
+                    startDate = dto.startDate,
                     ownerIds = dto.ownerIds,
                     priority = dto.priority,
                     createdAt = dto.createdAt,

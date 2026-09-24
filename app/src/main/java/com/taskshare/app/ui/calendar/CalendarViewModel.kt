@@ -12,12 +12,16 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 enum class CalendarMode { DAY, WEEK, MONTH }
 
 data class CalendarUiState(
     val mode: CalendarMode = CalendarMode.WEEK,
-    val rangeLabel: String = "",
+    /** Large header text — e.g. "September" for month mode, "Sep 21 – 27" for week mode. */
+    val headerTitle: String = "",
+    /** Smaller header text under the title — e.g. the year. */
+    val headerSubtitle: String = "",
     val entriesByDay: Map<LocalDate, List<CalendarEntry>> = emptyMap(),
     /** The 7 dates (Sunday–Saturday) of the current week — only meaningful in WEEK mode. */
     val weekDates: List<LocalDate> = emptyList(),
@@ -46,11 +50,14 @@ class CalendarViewModel(private val repository: TaskRepository) : ViewModel() {
             tasks, instances,
             start.atStartOfDay(zone).toInstant(),
             end.atStartOfDay(zone).toInstant(),
+            zone,
         )
         val byDay = entries.groupBy { it.at.atZone(zone).toLocalDate() }
+        val (headerTitle, headerSubtitle) = headerFor(mode, anchor, start, end)
         CalendarUiState(
             mode = mode,
-            rangeLabel = "$start – ${end.minusDays(1)}",
+            headerTitle = headerTitle,
+            headerSubtitle = headerSubtitle,
             entriesByDay = byDay,
             weekDates = if (mode == CalendarMode.WEEK) (0..6).map { start.plusDays(it.toLong()) } else emptyList(),
             monthGrid = if (mode == CalendarMode.MONTH) MonthGrid.forMonth(anchor) else emptyList(),
@@ -101,5 +108,22 @@ class CalendarViewModel(private val repository: TaskRepository) : ViewModel() {
         fun factory(repository: TaskRepository) = viewModelFactory {
             initializer { CalendarViewModel(repository) }
         }
+    }
+}
+
+/** Pure so it's easy to reason about independent of the view model's flows. */
+internal fun headerFor(mode: CalendarMode, anchor: LocalDate, rangeStart: LocalDate, rangeEndExclusive: LocalDate): Pair<String, String> {
+    val lastDay = rangeEndExclusive.minusDays(1)
+    return when (mode) {
+        CalendarMode.MONTH -> anchor.format(DateTimeFormatter.ofPattern("MMMM")) to anchor.format(DateTimeFormatter.ofPattern("yyyy"))
+        CalendarMode.WEEK -> {
+            val title = if (rangeStart.month == lastDay.month) {
+                "${rangeStart.format(DateTimeFormatter.ofPattern("MMM d"))} – ${lastDay.format(DateTimeFormatter.ofPattern("d"))}"
+            } else {
+                "${rangeStart.format(DateTimeFormatter.ofPattern("MMM d"))} – ${lastDay.format(DateTimeFormatter.ofPattern("MMM d"))}"
+            }
+            title to rangeStart.format(DateTimeFormatter.ofPattern("yyyy"))
+        }
+        CalendarMode.DAY -> anchor.format(DateTimeFormatter.ofPattern("EEEE")) to anchor.format(DateTimeFormatter.ofPattern("MMMM d, yyyy"))
     }
 }

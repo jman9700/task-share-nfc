@@ -3,6 +3,7 @@ package com.taskshare.app.data.sync
 import com.taskshare.app.data.model.Frequency
 import com.taskshare.app.data.model.Priority
 import java.time.Instant
+import java.time.LocalDate
 
 /**
  * Wire format exchanged over the Bluetooth transport once the NFC handshake has paired two
@@ -26,7 +27,8 @@ data class SyncTaskDto(
     val name: String,
     val description: String,
     val location: String,
-    val frequency: Frequency,
+    val frequency: Frequency?,
+    val startDate: LocalDate,
     val ownerIds: List<String>,
     val priority: Priority,
     val createdAt: Instant,
