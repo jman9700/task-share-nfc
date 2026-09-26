@@ -3,6 +3,7 @@ package com.taskshare.app.transport
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothServerSocket
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -23,9 +24,14 @@ class BluetoothRfcommServer(private val context: Context) {
         // TODO: requires BLUETOOTH_CONNECT (API 31+); see README "Known gaps" (permissions).
         val serverSocket: BluetoothServerSocket =
             adapter.listenUsingRfcommWithServiceRecord(SERVICE_NAME, BluetoothDeviceTransport.SERVICE_UUID)
+        Log.d(TaskShareSyncLog.TAG, "BluetoothRfcommServer: listening for a connection")
         try {
             val socket = withTimeout(timeoutMs) { serverSocket.accept() }
+            Log.d(TaskShareSyncLog.TAG, "BluetoothRfcommServer: accepted a connection")
             BluetoothTransportSession(socket)
+        } catch (e: Exception) {
+            Log.w(TaskShareSyncLog.TAG, "BluetoothRfcommServer: no incoming connection within ${timeoutMs}ms", e)
+            throw e
         } finally {
             serverSocket.close()
         }

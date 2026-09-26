@@ -1,5 +1,9 @@
 package com.taskshare.app.ui.share
 
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.Context
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -56,9 +60,28 @@ fun ShareUpdateScreen(
     )
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    // A real sync failure traced back to exactly this: Bluetooth simply being off makes
+    // BluetoothLeAdvertiser return null with no exception, so the *other* phone never starts
+    // advertising and this side's scan just times out after 20s with an unhelpful error. Only
+    // catches it on this (active) side — the passive/tapped side has no screen to check this
+    // from, hence the reminder text below.
+    fun isBluetoothEnabled(): Boolean = try {
+        // Reading isEnabled itself requires BLUETOOTH_CONNECT on API 31+, and this can run
+        // before permission is granted, so this has to tolerate not having it yet rather than
+        // crash — the permission gate below still renders first either way.
+        (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter?.isEnabled == true
+    } catch (_: SecurityException) {
+        false
+    }
+
     var hasBluetoothPermission by remember { mutableStateOf(BluetoothPermissions.allGranted(context)) }
+    var bluetoothEnabled by remember { mutableStateOf(isBluetoothEnabled()) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
         hasBluetoothPermission = results.values.all { it }
+        bluetoothEnabled = isBluetoothEnabled() // re-check: the first read above may have been a permission-gated false negative
+    }
+    val enableBluetoothLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        bluetoothEnabled = isBluetoothEnabled()
     }
 
     Scaffold(
@@ -86,11 +109,23 @@ fun ShareUpdateScreen(
                 return@Column
             }
 
+            if (!bluetoothEnabled) {
+                Text("Bluetooth is turned off. It needs to be on to sync — NFC only handles the initial handshake.")
+                Button(
+                    onClick = { enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) },
+                    modifier = Modifier.padding(top = 16.dp),
+                ) {
+                    Text("Turn on Bluetooth")
+                }
+                return@Column
+            }
+
             when (val s = state) {
                 is ShareState.Idle -> {
                     Text(
                         "Hold your phone near your partner's phone. New tasks and completions from " +
-                            "each device get added to the other — nothing already on either phone is changed.",
+                            "each device get added to the other — nothing already on either phone is changed. " +
+                            "Bluetooth needs to be turned on on BOTH phones, not just this one.",
                     )
                     Button(
                         onClick = { viewModel.startShare(apkDownloadDestination()) },

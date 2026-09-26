@@ -1,9 +1,11 @@
 package com.taskshare.app.nfc
 
 import android.content.Context
+import android.util.Log
 import com.taskshare.app.TaskShareApp
 import com.taskshare.app.permissions.BluetoothPermissions
 import com.taskshare.app.transport.BluetoothRfcommServer
+import com.taskshare.app.transport.TaskShareSyncLog
 import com.taskshare.app.transport.ble.BlePairingAdvertiser
 import com.taskshare.app.update.LocalAppVersion
 import kotlinx.coroutines.CoroutineScope
@@ -38,16 +40,22 @@ class PassiveSyncResponder(private val context: Context) {
 
     /** Fire-and-forget: must return immediately since this is called from an APDU callback. */
     fun respondAsync(sessionToken: String) {
-        if (!BluetoothPermissions.allGranted(context)) return
+        Log.d(TaskShareSyncLog.TAG, "PassiveSyncResponder: tap received, token=$sessionToken")
+        if (!BluetoothPermissions.allGranted(context)) {
+            Log.w(TaskShareSyncLog.TAG, "PassiveSyncResponder: Bluetooth permission not granted, aborting")
+            return
+        }
 
         scope.launch {
             val advertiser = BlePairingAdvertiser(context)
             try {
                 advertiser.start(sessionToken)
                 runSync()
-            } catch (_: Exception) {
+                Log.d(TaskShareSyncLog.TAG, "PassiveSyncResponder: sync completed successfully")
+            } catch (e: Exception) {
                 // No UI to surface a failure to on this side; the active side's ShareUpdateScreen
                 // will time out and show its own error.
+                Log.w(TaskShareSyncLog.TAG, "PassiveSyncResponder: sync failed", e)
             } finally {
                 advertiser.stop()
             }
@@ -56,7 +64,9 @@ class PassiveSyncResponder(private val context: Context) {
 
     private suspend fun runSync() {
         val app = context.applicationContext as TaskShareApp
+        Log.d(TaskShareSyncLog.TAG, "PassiveSyncResponder: waiting for RFCOMM connection")
         val session = BluetoothRfcommServer(context).acceptOnce()
+        Log.d(TaskShareSyncLog.TAG, "PassiveSyncResponder: RFCOMM connected")
         try {
             val local = LocalAppVersion.get(context)
             val peerVersion = session.exchangeVersion(local.versionCode, local.versionName)

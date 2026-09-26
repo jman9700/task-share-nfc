@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.util.Log
 import com.taskshare.app.data.sync.SyncPayload
 import com.taskshare.app.permissions.BluetoothPermissions
 import com.taskshare.app.permissions.MissingBluetoothPermissionException
@@ -44,14 +45,22 @@ class BluetoothDeviceTransport(
         val manager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
         val adapter: BluetoothAdapter = manager?.adapter ?: error("No Bluetooth adapter on this device")
 
-        val address = withTimeout(SCAN_TIMEOUT_MS) {
-            BlePairingScanner(context).findPeerAddress(pairingInfo.sessionToken)
+        Log.d(TaskShareSyncLog.TAG, "BluetoothDeviceTransport: scanning for peer, token=${pairingInfo.sessionToken}")
+        val address = try {
+            withTimeout(SCAN_TIMEOUT_MS) {
+                BlePairingScanner(context).findPeerAddress(pairingInfo.sessionToken)
+            }
+        } catch (e: Exception) {
+            Log.w(TaskShareSyncLog.TAG, "BluetoothDeviceTransport: peer never found via BLE scan (see the OTHER phone's logcat for why its advertiser didn't start)", e)
+            throw e
         }
+        Log.d(TaskShareSyncLog.TAG, "BluetoothDeviceTransport: peer found at $address, connecting RFCOMM")
         val device = adapter.getRemoteDevice(address)
         // TODO: this requires BLUETOOTH_CONNECT at call time (API 31+) and that the device is
         // either already bonded or bonds here; unbonded RFCOMM connect will prompt the user.
         val socket: BluetoothSocket = device.createRfcommSocketToServiceRecord(SERVICE_UUID)
         socket.connect()
+        Log.d(TaskShareSyncLog.TAG, "BluetoothDeviceTransport: RFCOMM connected")
         BluetoothTransportSession(socket)
     }
 
